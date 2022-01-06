@@ -1,0 +1,90 @@
+---
+  version: '3'
+  services:
+    zookeeper:
+      image: confluentinc/cp-zookeeper:latest
+      networks: 
+        - net
+      ports:
+        - 2181:2181
+      environment:
+        ZOOKEEPER_CLIENT_PORT: 2181
+        ZOOKEEPER_TICK_TIME: 2000
+  
+    kafka:
+      image: confluentinc/cp-kafka:latest
+      networks: 
+        - net
+      depends_on:
+        - zookeeper
+      ports:
+        - 9092:9092
+        - 29092:29092
+      environment:
+        KAFKA_BROKER_ID: 1
+        KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+        KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+        KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+        KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+        KAFKA_CREATE_TOPICS: "Fries:1:1, Grill:1:1, Salad:1:1, Drink:1:1, Desert:1:1 "
+  
+    init-kafka:
+      image: confluentinc/cp-kafka:latest
+      depends_on:
+      - kafka
+      networks: 
+      - net 
+      entrypoint: [ '/bin/sh', '-c' ]
+      command: |
+        "
+        # blocks until kafka is reachable
+        kafka-topics --bootstrap-server kafka:29092 --list
+        echo -e 'Creating kafka topics'
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic Fries --partitions 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic Grill  --partitions 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic Salad  --partitions 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic Drink  --partitions 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic Desert  --partitions 1
+
+        echo -e 'Successfully created the following topics:'
+        kafka-topics --bootstrap-server kafka:29092 --list
+        "
+
+    
+    ksfdrop:
+      image: obsidiandynamics/kafdrop:latest
+      networks: 
+      - net 
+      depends_on:
+      - kafka
+      ports:
+      - 19000:9000
+      environment:
+        KAFKA_BROKERCONNECT: kafka:29092
+   
+    db:
+      image: mysql:5.7
+      volumes:
+        - mysql-db:/var/lib/mysql
+      environment:
+        MYSQL_ROOT_PASSWORD: root
+        MYSQL_DATABASE: my_db_name
+      ports:
+        - "3306:3306"
+      networks:
+       - net
+
+    adminer:
+      image: adminer
+      ports:
+      - 8080:8080
+      networks:
+      - net
+
+  volumes:
+    mysql-db:
+
+  networks: 
+    net:
+      driver: bridge
